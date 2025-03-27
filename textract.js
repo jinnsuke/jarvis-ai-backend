@@ -8,7 +8,7 @@ const textract = new TextractClient({ region: process.env.AWS_REGION });
 async function analyzeDocument(s3Bucket, s3Key) {
   const params = {
     Document: { S3Object: { Bucket: s3Bucket, Name: s3Key } },
-    FeatureTypes: ["TABLES", "FORMS"],
+    FeatureTypes: ["TABLES", "FORMS"], // Enable table and form data extraction
   };
 
   const command = new AnalyzeDocumentCommand(params);

@@ -1,27 +1,30 @@
-// Handles AWS Textract OCR processing
+require("dotenv").config(); // Load environment variables
+const express = require("express");
+const multer = require("multer");
+const cors = require("cors");
+const path = require("path");
 
-require("dotenv").config();
-const { TextractClient, AnalyzeDocumentCommand } = require("@aws-sdk/client-textract");
+// Import file upload and Textract functions
+const { uploadFileToS3 } = require("./s3");
+const { analyzeDocument } = require("./textract");
+const uploadHandler = require("./uploadHandler"); // Import handler
 
-const textract = new TextractClient({ region: process.env.AWS_REGION });
+const app = express();
+app.use(express.json());
+app.use(cors()); // Allow frontend to call API
 
-async function analyzeDocument(s3Bucket, s3Key) {
-  const params = {
-    Document: { S3Object: { Bucket: s3Bucket, Name: s3Key } },
-    FeatureTypes: ["TABLES", "FORMS"],
-  };
+// API Route for File Upload & Processing
+app.use("/api", uploadHandler); // Connect the /upload route from uploadHandler.js
 
-  const command = new AnalyzeDocumentCommand(params);
-  const response = await textract.send(command);
+// Serve Frontend (Only in Production)
+const FRONTEND_PATH = path.join(__dirname, "../frontend/dist");
+app.use(express.static(FRONTEND_PATH));
+app.get("*", (req, res) => {
+  res.sendFile(path.join(FRONTEND_PATH, "index.html"));
+});
 
-  let extractedText = "";
-  response.Blocks.forEach((block) => {
-    if (block.BlockType === "LINE") {
-      extractedText += block.Text + "\n";
-    }
-  });
-
-  return extractedText;
-}
-
-module.exports = { analyzeDocument };
+// Start the server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
