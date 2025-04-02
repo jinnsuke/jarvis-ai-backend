@@ -6,7 +6,7 @@ const path = require("path");
 
 // Import file upload and Textract functions
 const { uploadFileToS3 } = require("./s3");
-const { analyzeDocument } = require("./textract");
+// const { analyzeDocument } = require("./textract");
 const uploadHandler = require("./uploadHandler"); // Import handler
 
 const app = express();
