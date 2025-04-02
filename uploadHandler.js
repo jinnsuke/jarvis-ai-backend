@@ -25,24 +25,24 @@ router.post("/upload", upload.single("file"), async (req, res) => {
     // Count occurrences of identical stickers
     const stickerMap = new Map();
     for (const sticker of extractedStickers) {
-        const key = JSON.stringify(sticker);
-        if (stickerMap.has(key)) {
-            stickerMap.set(key, stickerMap.get(key) + 1);
-        } else {
-            stickerMap.set(key, 1);
-        }
+      const key = JSON.stringify(sticker);
+      if (stickerMap.has(key)) {
+        stickerMap.set(key, stickerMap.get(key) + 1);
+      } else {
+        stickerMap.set(key, 1);
+      }
     }
 
     // 4. Insert each sticker into the database
     for (const [stickerStr, quantity] of stickerMap.entries()) {
-        const { brand, product, dimensions, gtin, ref, lot } = JSON.parse(stickerStr);
+      const { brand, product, dimensions, gtin, ref, lot } = JSON.parse(stickerStr);
 
-        await db.query(
-            `INSERT INTO product_labels (
-            image_name, brand, item, dimensions, gtin, ref, lot, quantity
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-            [imageName, brand, product, dimensions, gtin, ref, lot, quantity]
-        );
+      await db.query(
+        `INSERT INTO product_labels (
+          image_name, brand, item, dimensions, gtin, ref, lot, quantity
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [imageName, brand, product, dimensions, gtin, ref, lot, quantity]
+      );
     }
 
     res.json({

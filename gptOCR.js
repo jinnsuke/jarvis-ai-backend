@@ -15,7 +15,7 @@ async function extractTextFromImage(base64Image) {
           {
             type: "text",
             text: `This image contains multiple product stickers. For each sticker, extract:
-- brand
+- brand (make sure this is an actual MedTech company ie. Bard, Hemoteq AG)
 - product
 - dimensions
 - gtin
