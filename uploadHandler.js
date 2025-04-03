@@ -13,14 +13,17 @@ router.post("/upload", upload.single("file"), async (req, res) => {
     const file = req.file;
     const imageName = req.body.documentName || file.originalname;
 
-    // 1. Upload to S3
-    const fileKey = await uploadFileToS3(file);
+    // Step 1: Upload file to S3 (asynchronous)
+    const s3UploadPromise = uploadFileToS3(file);
 
-    // 2. Convert to base64
+    // Step 2: Convert the image to base64
     const base64Image = file.buffer.toString("base64");
 
-    // 3. Extract text using GPT-4o
+    // Step 3: Extract text using GPT-4o (synchronously after Step 2)
     const extractedStickers = await extractTextFromImage(base64Image);
+
+    // Wait for S3 upload to complete
+    const fileKey = await s3UploadPromise;
 
     // Count occurrences of identical stickers
     const stickerMap = new Map();
@@ -33,7 +36,7 @@ router.post("/upload", upload.single("file"), async (req, res) => {
       }
     }
 
-    // 4. Insert each sticker into the database
+    // Step 4: Insert each sticker into the database
     for (const [stickerStr, quantity] of stickerMap.entries()) {
       const { brand, product, dimensions, gtin, ref, lot } = JSON.parse(stickerStr);
 
