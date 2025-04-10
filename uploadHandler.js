@@ -103,9 +103,14 @@ module.exports = (io) => {
 
         await db.query(
           `INSERT INTO product_labels (
-            image_name, brand, item, dimensions, gtin, ref, lot, quantity, user_id
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-          [imageName, brand, product, dimensions, gtin, ref, lot, quantity, userId]
+            image_name, brand, item, dimensions, gtin, ref, lot, quantity, user_id,
+            procedure_date, hospital, doctor, procedure_name, billing_no
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+          [
+            imageName, brand, product, dimensions, gtin, ref, lot, quantity, userId,
+            new Date(req.body.procedureDate), req.body.hospital, req.body.doctor, 
+            req.body.procedure, req.body.billingNo
+          ]
         );
       }
 
