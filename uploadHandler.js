@@ -90,24 +90,26 @@ module.exports = (io) => {
         }
       }, 500); // Emit every 700ms
 
-      // Count occurrences of identical stickers
+      // Count occurrences of identical stickers (using only GTIN)
       const stickerMap = new Map();
       for (const sticker of extractedStickers) {
-        const key = JSON.stringify(sticker);
+        const key = sticker.gtin; // Only use GTIN as the key
         stickerMap.set(key, (stickerMap.get(key) || 0) + 1);
       }
 
       // Step 4: Insert each sticker into the database
-      for (const [stickerStr, quantity] of stickerMap.entries()) {
-        const { brand, product, dimensions, gtin, ref, lot } = JSON.parse(stickerStr);
-
+      for (const [gtin, quantity] of stickerMap.entries()) {
+        // Find the first sticker with this GTIN to get its other properties
+        const sticker = extractedStickers.find(s => s.gtin === gtin);
+        
         await db.query(
           `INSERT INTO product_labels (
             image_name, brand, item, dimensions, gtin, ref, lot, quantity, user_id,
             procedure_date, hospital, doctor, procedure_name, billing_no
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
           [
-            imageName, brand, product, dimensions, gtin, ref, lot, quantity, userId,
+            imageName, sticker.brand, sticker.product, sticker.dimensions, gtin, 
+            sticker.ref, sticker.lot, quantity, userId,
             new Date(req.body.procedureDate), req.body.hospital, req.body.doctor, 
             req.body.procedure, req.body.billingNo
           ]

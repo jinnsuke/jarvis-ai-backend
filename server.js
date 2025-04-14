@@ -105,32 +105,63 @@ app.put("/api/document/:name/sticker/:gtin/quantity", authenticateToken, async (
   }
 });
 
-// Export data endpoint
+// Export data endpoint with improved error handling
 app.post("/api/export", authenticateToken, async (req, res) => {
   const { startDate, endDate } = req.body;
   const userId = req.user.userId;
 
+  if (!userId) {
+    return res.status(401).json({ message: "Unauthorized - User ID not found" });
+  }
+
+  if (!startDate || !endDate) {
+    return res.status(400).json({ message: "Start date and end date are required" });
+  }
+
   try {
-    // Query the database for all data, with optional date range
-    let query = `SELECT * FROM product_labels WHERE user_id = $1`;
-    let params = [userId];
-
-    if (startDate && endDate) {
-      query += ` AND procedure_date BETWEEN $2 AND $3`;
-      params.push(startDate, endDate);
-    }
-
-    query += ` ORDER BY procedure_date ASC NULLS LAST`;
+    // Query the database for all data with date range
+    const query = `
+      SELECT 
+        image_name,
+        brand,
+        item,
+        dimensions,
+        gtin,
+        ref,
+        lot,
+        quantity,
+        procedure_date,
+        hospital,
+        doctor,
+        procedure_name,
+        billing_no
+      FROM product_labels 
+      WHERE user_id = $1
+        AND procedure_date >= $2::date 
+        AND procedure_date < ($3::date + INTERVAL '1 day')
+      ORDER BY procedure_date ASC NULLS LAST
+    `;
     
+    const params = [userId, startDate, endDate];
     const result = await db.query(query, params);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ message: "No data found" });
+      return res.status(404).json({ 
+        message: "No data found for the selected date range",
+        dateRange: { startDate, endDate }
+      });
     }
 
     // Create workbook and worksheet
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(result.rows);
+    
+    // Format dates in the result set
+    const formattedData = result.rows.map(row => ({
+      ...row,
+      procedure_date: row.procedure_date ? new Date(row.procedure_date).toLocaleDateString() : ''
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(formattedData);
 
     // Add the worksheet to the workbook
     XLSX.utils.book_append_sheet(wb, ws, "Extracted Data");
@@ -146,15 +177,20 @@ app.post("/api/export", authenticateToken, async (req, res) => {
     res.send(buffer);
   } catch (error) {
     console.error("Error exporting data:", error);
-    res.status(500).json({ message: "Error exporting data", error: error.message });
+    res.status(500).json({ 
+      message: "Error exporting data", 
+      error: error.message,
+      dateRange: { startDate, endDate }
+    });
   }
 });
 
 // Serve frontend (only in production)
 const FRONTEND_PATH = path.join(__dirname, "../frontend/dist");
-app.use(express.static(FRONTEND_PATH)); // Serving frontend assets
+app.use(express.static(FRONTEND_PATH));
 
 // Catch-all route to serve index.html for frontend requests
+// This should be the LAST route
 app.get("*", (req, res) => {
   res.sendFile(path.join(FRONTEND_PATH, "index.html"));
 });

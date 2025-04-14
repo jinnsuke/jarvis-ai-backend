@@ -1,5 +1,5 @@
 const express = require('express');
-const { generateToken, hashPassword, comparePassword } = require('./auth');
+const { generateToken, hashPassword, comparePassword, authenticateToken } = require('./auth');
 const db = require('./db');
 
 const router = express.Router();
@@ -82,8 +82,13 @@ router.post('/login', async (req, res) => {
 });
 
 // Get current user
-router.get('/me', async (req, res) => {
+router.get('/me', authenticateToken, async (req, res) => {
   try {
+    // Verify we have a user ID
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({ message: 'Unauthorized - No valid user session' });
+    }
+
     const result = await db.query(
       'SELECT id, email, name FROM users WHERE id = $1',
       [req.user.userId]
