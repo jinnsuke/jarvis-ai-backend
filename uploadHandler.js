@@ -4,6 +4,7 @@ const fs = require("fs");
 const uploadFileToS3 = require("./s3").uploadFileToS3;
 const extractTextFromImage = require("./gptOCR");
 const db = require("./db");
+const { authenticateToken } = require('./auth');
 
 // Configure multer
 const upload = multer({ 
@@ -17,16 +18,35 @@ const router = express.Router();
 
 module.exports = (io) => {
   // API Route to handle file upload and OCR processing
-  router.post("/", upload.single("file"), async (req, res) => {
+  router.post("/", authenticateToken, upload.single("file"), async (req, res) => {
     try {
+      console.error('=== UPLOAD REQUEST START ===');
+      console.error('Upload request received');
+      console.error('Request user object:', req.user);
+      
+      // Ensure we have a valid user ID
+      if (!req.user || !req.user.userId) {
+        console.error('❌ No valid user ID in request');
+        console.error('req.user:', req.user);
+        console.error('req.headers:', req.headers);
+        return res.status(401).json({ message: "No valid user ID found" });
+      }
+      const userId = req.user.userId;
+      console.error('✅ User ID from request:', userId);
+
       // Check if file exists
       if (!req.file) {
+        console.error('❌ No file uploaded');
         return res.status(400).json({ message: "No file uploaded" });
       }
 
       const file = req.file;
       const imageName = req.body.documentName || file.originalname;
-      const userId = req.user.userId; // Get user ID from authenticated request
+
+      console.error('Processing upload:');
+      console.error('- User ID:', userId);
+      console.error('- Document name:', imageName);
+      console.error('- File type:', file.mimetype);
 
       // Validate file type
       if (!file.mimetype.startsWith('image/') && file.mimetype !== 'application/pdf') {
@@ -38,23 +58,8 @@ module.exports = (io) => {
       io.emit("upload-progress", { progress: 0 });
 
       // Step 1: Upload file to S3 (asynchronous)
-      const s3UploadPromise = uploadFileToS3(file);
-
-      // Simulate progress update for upload
-      let progress = 0;
-      const interval = setInterval(() => {
-        if (progress < 40) {
-          progress += 5;
-          console.log(`Upload progress: ${progress}%`);
-          io.emit("upload-progress", { progress });
-        } else {
-          clearInterval(interval);
-          console.log("Upload progress reached 50%");
-        }
-      }, 500); // Emit every 500ms
-
-      // Wait for S3 upload to complete
-      const fileKey = await s3UploadPromise;
+      const fileKey = await uploadFileToS3(file, userId, imageName);
+      const s3Url = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileKey}`;
 
       // Emit progress 50% once file is uploaded
       io.emit("upload-progress", { progress: 40 });
@@ -69,9 +74,9 @@ module.exports = (io) => {
           clearInterval(extractionInterval);
           console.log("Text extraction complete (70%)");
         }
-      }, 1250); // Simulate each progress update every 700ms
+      }, 1250);
 
-      // Step 2: Extract text using GPT-4o (synchronously after Step 2)
+      // Step 2: Extract text using GPT-4 (synchronously after Step 2)
       const base64Image = file.buffer.toString("base64");
       const extractedStickers = await extractTextFromImage(base64Image);
 
@@ -88,7 +93,7 @@ module.exports = (io) => {
           clearInterval(dbInterval);
           console.log("Database insertion almost complete (95%)");
         }
-      }, 500); // Emit every 700ms
+      }, 500);
 
       // Count occurrences of identical stickers (using only GTIN)
       const stickerMap = new Map();
@@ -102,28 +107,45 @@ module.exports = (io) => {
         // Find the first sticker with this GTIN to get its other properties
         const sticker = extractedStickers.find(s => s.gtin === gtin);
         
+        // Log the values being inserted
+        console.error('=== INSERTING STICKER ===');
+        console.error('Values being inserted:', {
+          imageName,
+          brand: sticker.brand,
+          product: sticker.product,
+          dimensions: sticker.dimensions,
+          gtin,
+          ref: sticker.ref,
+          lot: sticker.lot,
+          quantity,
+          userId,
+          procedureDate: req.body.procedureDate,
+          hospital: req.body.hospital,
+          doctor: req.body.doctor,
+          procedure: req.body.procedure,
+          billingNo: req.body.billingNo,
+          s3Url
+        });
+        
         await db.query(
           `INSERT INTO product_labels (
             image_name, brand, item, dimensions, gtin, ref, lot, quantity, user_id,
-            procedure_date, hospital, doctor, procedure_name, billing_no
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+            procedure_date, hospital, doctor, procedure_name, billing_no, s3_image_url
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
           [
             imageName, sticker.brand, sticker.product, sticker.dimensions, gtin, 
             sticker.ref, sticker.lot, quantity, userId,
             new Date(req.body.procedureDate), req.body.hospital, req.body.doctor, 
-            req.body.procedure, req.body.billingNo
+            req.body.procedure, req.body.billingNo, s3Url
           ]
         );
       }
-
-      // STEP 5: Once database insertion is done, finalize progress to 100%
-    //   io.emit("upload-progress", { progress:  95});
 
       // Notify frontend that upload is complete (100% progress)
       setTimeout(() => {
         io.emit("upload-progress", { progress: 100 });
         io.emit("upload-complete", { message: "File upload and processing complete" });
-      }, 700); // 700ms delay before completing
+      }, 700);
 
       res.json({
         message: "File processed and data stored",

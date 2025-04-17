@@ -5,8 +5,8 @@ const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 
-async function uploadFileToS3(file) {
-    const fileKey = file.originalname.replace(/\s+/g, "_"); // Replace spaces with underscores
+async function uploadFileToS3(file, userId, documentName) {
+    const fileKey = `${userId}/${documentName}`; // Use userId as folder and documentName as filename
     const params = {
         Bucket: process.env.AWS_BUCKET_NAME,
         Key: fileKey,
@@ -16,9 +16,9 @@ async function uploadFileToS3(file) {
     
     console.log(`Uploading file to S3 with key: "${fileKey}"`);
     
-    await s3.send(new PutObjectCommand(params)); // Do not return the entire command response
+    await s3.send(new PutObjectCommand(params));
 
-    return fileKey; // Return only the file key
+    return fileKey;
 }
 
 module.exports = { uploadFileToS3 };

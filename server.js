@@ -66,7 +66,7 @@ app.get("/api/document/:name", authenticateToken, async (req, res) => {
 app.get("/api/gallery", authenticateToken, async (req, res) => {
   try {
     const result = await db.query(
-      "SELECT DISTINCT image_name FROM product_labels WHERE user_id = $1",
+      "SELECT DISTINCT ON (image_name) image_name, s3_image_url, procedure_date FROM product_labels WHERE user_id = $1 ORDER BY image_name, procedure_date DESC NULLS LAST",
       [req.user.userId]
     );
     res.json(result.rows);
