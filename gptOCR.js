@@ -43,6 +43,8 @@ async function extractTextFromImage(base64Image) {
     },
     ...
   ]
+   
+  After you have extracted the data, please verify the data you have extracted, especially the GTINs. Make any necessary corrections.
   `,
           },
           {
